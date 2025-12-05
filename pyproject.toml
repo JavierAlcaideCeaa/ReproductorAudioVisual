@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "video-player-python"
+version = "0.1.0"
+description = "A simple video player application built with Python."
+authors = ["Your Name <youremail@example.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+PyQt5 = "^5.15.4"
+opencv-python = "^4.5.3.20210927"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
