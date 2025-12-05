@@ -1,4 +1,7 @@
-# Video Player Project
+# ReproductorAudioVisual
+**Autor:** Javier Alcaide Cea
+
+## Descripción
 
 This project is a simple video player application built with Python. It provides a user-friendly interface for playing videos with basic controls.
 
