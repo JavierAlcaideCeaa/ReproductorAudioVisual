@@ -50,6 +50,7 @@ class UserInterface(QMainWindow):
         self.controls.stop_clicked.connect(self.stop)
         self.controls.volume_changed.connect(self.player.set_volume)
         self.controls.position_changed.connect(self.seek_position)
+        self.controls.open_file_clicked.connect(self.open_video_file)
     
     def toggle_play_pause(self):
         """Alterna entre play y pausa"""
@@ -92,3 +93,21 @@ class UserInterface(QMainWindow):
             
             self.controls.update_progress(current)
             self.controls.update_time_label(current, duration)
+    
+    def open_video_file(self):
+        """Abre un diálogo para seleccionar un video"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Seleccionar Video", "",
+            "Videos (*.mp4 *.avi *.mkv *.mov);;Todos los archivos (*.*)"
+        )
+        if file_path:
+            # Detener video actual si hay uno reproduciéndose
+            if self.player.cap:
+                self.player.stop()
+            
+            # Cargar y reproducir nuevo video
+            self.player.load_video(file_path)
+            duration = self.player.get_duration()
+            self.controls.set_duration(int(duration * 1000))
+            self.player.play()
+            self.controls.set_play_pause_text("Pause")

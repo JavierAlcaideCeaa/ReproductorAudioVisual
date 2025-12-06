@@ -26,6 +26,7 @@ class Controls(QWidget):
     stop_clicked = pyqtSignal()
     volume_changed = pyqtSignal(int)
     position_changed = pyqtSignal(int)
+    open_file_clicked = pyqtSignal()  # Nueva señal
 
     def __init__(self, player=None):
         super().__init__()
@@ -37,6 +38,12 @@ class Controls(QWidget):
         layout = QHBoxLayout()
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
+
+        # Open File button (nuevo)
+        self.open_file_btn = QPushButton("Open Video")
+        self.open_file_btn.setMinimumSize(100, 40)
+        self.open_file_btn.clicked.connect(self.open_file_clicked.emit)
+        layout.addWidget(self.open_file_btn)
 
         # Play/Pause button
         self.play_pause_btn = QPushButton("Play")
