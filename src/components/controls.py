@@ -2,14 +2,11 @@ from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QSlider, QLabel, 
 from PyQt5.QtCore import Qt, pyqtSignal
 
 class ProgressSlider(QSlider):
-    """Custom slider that allows clicking to seek"""
-    
     def __init__(self, orientation, parent=None):
         super().__init__(orientation, parent)
         self.setMouseTracking(True)
     
     def mousePressEvent(self, event):
-        """Handle mouse press to seek to clicked position"""
         if event.button() == Qt.MouseButton.LeftButton:
             value = QStyle.sliderValueFromPosition(
                 self.minimum(),
@@ -27,7 +24,8 @@ class Controls(QWidget):
     volume_changed = pyqtSignal(int)
     position_changed = pyqtSignal(int)
     open_file_clicked = pyqtSignal()
-    subtitles_toggled = pyqtSignal()  # Nueva señal
+    subtitles_toggled = pyqtSignal()
+    translation_toggled = pyqtSignal()
 
     def __init__(self, player=None):
         super().__init__()
@@ -41,8 +39,8 @@ class Controls(QWidget):
         layout.setSpacing(10)
 
         # Open File button
-        self.open_file_btn = QPushButton("Open Video")
-        self.open_file_btn.setMinimumSize(100, 40)
+        self.open_file_btn = QPushButton("Open")
+        self.open_file_btn.setMinimumSize(80, 40)
         self.open_file_btn.clicked.connect(self.open_file_clicked.emit)
         layout.addWidget(self.open_file_btn)
 
@@ -58,13 +56,21 @@ class Controls(QWidget):
         self.stop_btn.clicked.connect(self.stop_clicked.emit)
         layout.addWidget(self.stop_btn)
 
-        # Subtitles button (nuevo)
+        # Subtitles button
         self.subtitles_btn = QPushButton("Subtitles")
         self.subtitles_btn.setMinimumSize(50, 40)
         self.subtitles_btn.setCheckable(True)
         self.subtitles_btn.setChecked(True)
         self.subtitles_btn.clicked.connect(self.subtitles_toggled.emit)
         layout.addWidget(self.subtitles_btn)
+
+        # Translation button
+        self.translation_btn = QPushButton("Traducir")
+        self.translation_btn.setMinimumSize(80, 40)
+        self.translation_btn.setCheckable(True)
+        self.translation_btn.setChecked(False)
+        self.translation_btn.clicked.connect(self.translation_toggled.emit)
+        layout.addWidget(self.translation_btn)
 
         # Progress slider
         self.progress_slider = ProgressSlider(Qt.Orientation.Horizontal)
@@ -77,7 +83,7 @@ class Controls(QWidget):
         layout.addWidget(self.time_label)
 
         # Volume label
-        volume_label = QLabel("Volume:")
+        volume_label = QLabel("Vol:")
         volume_label.setStyleSheet("color: white; font-size: 14px;")
         layout.addWidget(volume_label)
 
@@ -92,7 +98,6 @@ class Controls(QWidget):
         self.setLayout(layout)
 
     def apply_styles(self):
-        """Aplica estilos CSS a los controles"""
         self.setStyleSheet("""
             QWidget {
                 background-color: #1a1a1a;

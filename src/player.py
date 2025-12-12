@@ -8,6 +8,7 @@ import time
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QImage, QPixmap
 from SubtitleGenerator import SubtitleGenerator
+from deep_translator import GoogleTranslator
 
 class VideoThread(QThread):
     change_pixmap_signal = pyqtSignal(QPixmap)
@@ -17,7 +18,7 @@ class VideoThread(QThread):
         self.cap = cap
         self.fps = fps
         self.is_running = True
-        self.start_time = start_time  # Tiempo de inicio para sincronización
+        self.start_time = start_time
     
     def run(self):
         frame_duration = 1.0 / self.fps
@@ -27,30 +28,23 @@ class VideoThread(QThread):
             if not ret:
                 break
             
-            # Convertir BGR a RGB
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             h, w, ch = frame.shape
             bytes_per_line = ch * w
             
-            # Crear QImage y emitir señal
             q_img = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
             pixmap = QPixmap.fromImage(q_img)
             self.change_pixmap_signal.emit(pixmap)
             
-            # Sincronización temporal
             elapsed = time.time() - self.start_time
             expected_frame = int(elapsed * self.fps)
             current_frame = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             
-            # Ajustar si hay diferencia
             if current_frame < expected_frame - 2:
-                # Video va muy lento, saltar frames
                 continue
             elif current_frame > expected_frame + 2:
-                # Video va muy rápido, esperar
                 time.sleep(frame_duration)
             else:
-                # Sincronizado, esperar tiempo normal
                 time.sleep(frame_duration)
     
     def stop(self):
@@ -68,17 +62,18 @@ class VideoPlayer:
         self.subtitles = []
         self.subtitle_generator = None
         self.subtitles_enabled = True
-        self.play_start_time = 0  # Para sincronización
-        self.pause_position = 0  # Posición al pausar
+        self.play_start_time = 0
+        self.pause_position = 0
+        self.translation_enabled = False
+        self.translation_target = 'es'
+        self.detected_language = None
         
-        # Inicializar pygame mixer
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
-        
+    
     def set_video_output(self, widget):
         self.video_widget = widget
     
     def _extract_audio(self, video_path):
-        """Extrae audio del video usando ffmpeg"""
         try:
             temp_audio = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
             temp_audio.close()
@@ -108,6 +103,7 @@ class VideoPlayer:
         
         self.subtitles = []
         self.pause_position = 0
+        self.detected_language = None
         
         file_ext = os.path.splitext(path)[1].lower()
         if file_ext in ['.mp3', '.wav', '.ogg', '.flac', '.m4a']:
@@ -135,20 +131,32 @@ class VideoPlayer:
                 except:
                     pass
     
-    def generate_subtitles(self, language='auto'):
-        """
-        Genera subtítulos del audio
-        language: 'auto' (detecta automáticamente), 'es-ES' (español), 'en-US' (inglés), etc.
-        """
+    def generate_subtitles(self):
         if self.audio_file and self.subtitles_enabled:
             self.subtitles = []
-            self.subtitle_generator = SubtitleGenerator(self.audio_file, language)
+            self.subtitle_generator = SubtitleGenerator(self.audio_file)
             self.subtitle_generator.subtitle_ready.connect(self.add_subtitle)
             self.subtitle_generator.start()
     
-    def add_subtitle(self, text, start_time, end_time):
-        self.subtitles.append((text, start_time, end_time))
-        print(f"Subtítulo añadido: {text} ({start_time:.2f}s - {end_time:.2f}s)")
+    def add_subtitle(self, text, start_time, end_time, language):
+        """Añade un subtítulo con traducción"""
+        if self.detected_language is None:
+            self.detected_language = language
+        
+        translated_text = ""
+        if language != self.translation_target:
+            try:
+                # Usar deep-translator en lugar de googletrans
+                translator = GoogleTranslator(source=language, target=self.translation_target)
+                translated_text = translator.translate(text)
+            except Exception as e:
+                print(f"Error traduciendo: {e}")
+                translated_text = text
+        else:
+            translated_text = text
+        
+        self.subtitles.append((text, translated_text, start_time, end_time, language))
+        print(f"Subtítulo: [{language}] {text} | [{self.translation_target}] {translated_text}")
     
     def get_current_subtitle(self):
         if not self.subtitles_enabled:
@@ -156,11 +164,25 @@ class VideoPlayer:
         
         current_pos = self.get_current_position()
         
-        for text, start, end in self.subtitles:
+        for original, translated, start, end, lang in self.subtitles:
             if (start - 0.1) <= current_pos <= end:
-                return text
+                if self.translation_enabled and translated:
+                    return translated
+                return original
         
         return ""
+    
+    def toggle_translation(self, target_language='es'):
+        """Activa/desactiva la traducción"""
+        self.translation_enabled = not self.translation_enabled
+        
+        if self.translation_enabled:
+            if self.detected_language == target_language:
+                self.translation_target = 'en' if target_language == 'es' else 'es'
+            else:
+                self.translation_target = target_language
+        
+        return self.translation_enabled, self.translation_target
     
     def toggle_subtitles(self):
         self.subtitles_enabled = not self.subtitles_enabled
@@ -173,14 +195,12 @@ class VideoPlayer:
         self.is_playing = True
         self.play_start_time = time.time() - self.pause_position
         
-        # Iniciar video thread solo si hay video
         if not self.is_audio_only and self.cap:
             if self.video_thread is None or not self.video_thread.isRunning():
                 self.video_thread = VideoThread(self.cap, self.fps, self.play_start_time)
                 self.video_thread.change_pixmap_signal.connect(self.update_frame)
                 self.video_thread.start()
         
-        # Reproducir audio sincronizado
         if self.audio_file:
             try:
                 if self.pause_position > 0:
@@ -242,25 +262,21 @@ class VideoPlayer:
         if not self.is_playing:
             return self.pause_position
         
-        # Usar tiempo real como referencia
         return time.time() - self.play_start_time
     
     def seek(self, seconds):
         was_playing = self.is_playing
         
-        # Detener todo
         if self.video_thread:
             self.video_thread.stop()
         pygame.mixer.music.stop()
         
         self.pause_position = seconds
         
-        # Posicionar video
         if self.cap:
             frame_number = int(seconds * self.fps)
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         
-        # Reanudar si estaba reproduciéndose
         if was_playing:
             self.play_start_time = time.time() - seconds
             self.play()

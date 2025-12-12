@@ -6,3 +6,5 @@ pytest
 pygame
 SpeechRecognition
 pydub
+langdetect
+googletrans==4.0.0rc1
