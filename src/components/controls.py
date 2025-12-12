@@ -26,7 +26,8 @@ class Controls(QWidget):
     stop_clicked = pyqtSignal()
     volume_changed = pyqtSignal(int)
     position_changed = pyqtSignal(int)
-    open_file_clicked = pyqtSignal()  # Nueva señal
+    open_file_clicked = pyqtSignal()
+    subtitles_toggled = pyqtSignal()  # Nueva señal
 
     def __init__(self, player=None):
         super().__init__()
@@ -39,7 +40,7 @@ class Controls(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
 
-        # Open File button (nuevo)
+        # Open File button
         self.open_file_btn = QPushButton("Open Video")
         self.open_file_btn.setMinimumSize(100, 40)
         self.open_file_btn.clicked.connect(self.open_file_clicked.emit)
@@ -56,6 +57,14 @@ class Controls(QWidget):
         self.stop_btn.setMinimumSize(80, 40)
         self.stop_btn.clicked.connect(self.stop_clicked.emit)
         layout.addWidget(self.stop_btn)
+
+        # Subtitles button (nuevo)
+        self.subtitles_btn = QPushButton("Subtitles")
+        self.subtitles_btn.setMinimumSize(50, 40)
+        self.subtitles_btn.setCheckable(True)
+        self.subtitles_btn.setChecked(True)
+        self.subtitles_btn.clicked.connect(self.subtitles_toggled.emit)
+        layout.addWidget(self.subtitles_btn)
 
         # Progress slider
         self.progress_slider = ProgressSlider(Qt.Orientation.Horizontal)
@@ -104,6 +113,10 @@ class Controls(QWidget):
             }
             
             QPushButton:pressed {
+                background-color: #cc7000;
+            }
+            
+            QPushButton:checked {
                 background-color: #cc7000;
             }
             

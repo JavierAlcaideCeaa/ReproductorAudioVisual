@@ -4,19 +4,24 @@ import pygame
 import subprocess
 import os
 import tempfile
+import time
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QImage, QPixmap
+from SubtitleGenerator import SubtitleGenerator
 
 class VideoThread(QThread):
     change_pixmap_signal = pyqtSignal(QPixmap)
     
-    def __init__(self, cap, fps):
+    def __init__(self, cap, fps, start_time):
         super().__init__()
         self.cap = cap
         self.fps = fps
         self.is_running = True
+        self.start_time = start_time  # Tiempo de inicio para sincronización
     
     def run(self):
+        frame_duration = 1.0 / self.fps
+        
         while self.is_running:
             ret, frame = self.cap.read()
             if not ret:
@@ -32,8 +37,21 @@ class VideoThread(QThread):
             pixmap = QPixmap.fromImage(q_img)
             self.change_pixmap_signal.emit(pixmap)
             
-            # Control de FPS
-            self.msleep(int(1000 / self.fps))
+            # Sincronización temporal
+            elapsed = time.time() - self.start_time
+            expected_frame = int(elapsed * self.fps)
+            current_frame = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+            
+            # Ajustar si hay diferencia
+            if current_frame < expected_frame - 2:
+                # Video va muy lento, saltar frames
+                continue
+            elif current_frame > expected_frame + 2:
+                # Video va muy rápido, esperar
+                time.sleep(frame_duration)
+            else:
+                # Sincronizado, esperar tiempo normal
+                time.sleep(frame_duration)
     
     def stop(self):
         self.is_running = False
@@ -46,6 +64,12 @@ class VideoPlayer:
         self.volume = 50
         self.video_thread = None
         self.audio_file = None
+        self.is_audio_only = False
+        self.subtitles = []
+        self.subtitle_generator = None
+        self.subtitles_enabled = True
+        self.play_start_time = 0  # Para sincronización
+        self.pause_position = 0  # Posición al pausar
         
         # Inicializar pygame mixer
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
@@ -56,11 +80,9 @@ class VideoPlayer:
     def _extract_audio(self, video_path):
         """Extrae audio del video usando ffmpeg"""
         try:
-            # Crear archivo temporal para el audio
             temp_audio = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
             temp_audio.close()
             
-            # Extraer audio con ffmpeg (debe estar instalado en el sistema)
             subprocess.run([
                 'ffmpeg', '-i', video_path,
                 '-vn', '-acodec', 'pcm_s16le', 
@@ -77,42 +99,92 @@ class VideoPlayer:
             self.stop()
             self.cap.release()
         
-        # Limpiar audio anterior
         if self.audio_file and os.path.exists(self.audio_file):
             try:
-                os.unlink(self.audio_file)
+                if not self.is_audio_only:
+                    os.unlink(self.audio_file)
             except:
                 pass
         
-        self.cap = cv2.VideoCapture(path)
-        self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30
+        self.subtitles = []
+        self.pause_position = 0
         
-        # Extraer y cargar audio
-        self.audio_file = self._extract_audio(path)
-        if self.audio_file:
+        file_ext = os.path.splitext(path)[1].lower()
+        if file_ext in ['.mp3', '.wav', '.ogg', '.flac', '.m4a']:
+            self.is_audio_only = True
+            self.cap = None
+            self.audio_file = path
+            
             try:
                 pygame.mixer.music.load(self.audio_file)
                 pygame.mixer.music.set_volume(self.volume / 100.0)
-            except:
-                pass
+                self.generate_subtitles()
+            except Exception as e:
+                print(f"Error cargando audio: {e}")
+        else:
+            self.is_audio_only = False
+            self.cap = cv2.VideoCapture(path)
+            self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30
+            
+            self.audio_file = self._extract_audio(path)
+            if self.audio_file:
+                try:
+                    pygame.mixer.music.load(self.audio_file)
+                    pygame.mixer.music.set_volume(self.volume / 100.0)
+                    self.generate_subtitles()
+                except:
+                    pass
+    
+    def generate_subtitles(self, language='auto'):
+        """
+        Genera subtítulos del audio
+        language: 'auto' (detecta automáticamente), 'es-ES' (español), 'en-US' (inglés), etc.
+        """
+        if self.audio_file and self.subtitles_enabled:
+            self.subtitles = []
+            self.subtitle_generator = SubtitleGenerator(self.audio_file, language)
+            self.subtitle_generator.subtitle_ready.connect(self.add_subtitle)
+            self.subtitle_generator.start()
+    
+    def add_subtitle(self, text, start_time, end_time):
+        self.subtitles.append((text, start_time, end_time))
+        print(f"Subtítulo añadido: {text} ({start_time:.2f}s - {end_time:.2f}s)")
+    
+    def get_current_subtitle(self):
+        if not self.subtitles_enabled:
+            return ""
+        
+        current_pos = self.get_current_position()
+        
+        for text, start, end in self.subtitles:
+            if (start - 0.1) <= current_pos <= end:
+                return text
+        
+        return ""
+    
+    def toggle_subtitles(self):
+        self.subtitles_enabled = not self.subtitles_enabled
+        return self.subtitles_enabled
     
     def play(self):
-        if not self.cap:
+        if not self.cap and not self.is_audio_only:
             return
+            
         self.is_playing = True
+        self.play_start_time = time.time() - self.pause_position
         
-        # Iniciar video thread
-        if self.video_thread is None or not self.video_thread.isRunning():
-            self.video_thread = VideoThread(self.cap, self.fps)
-            self.video_thread.change_pixmap_signal.connect(self.update_frame)
-            self.video_thread.start()
+        # Iniciar video thread solo si hay video
+        if not self.is_audio_only and self.cap:
+            if self.video_thread is None or not self.video_thread.isRunning():
+                self.video_thread = VideoThread(self.cap, self.fps, self.play_start_time)
+                self.video_thread.change_pixmap_signal.connect(self.update_frame)
+                self.video_thread.start()
         
-        # Reproducir audio
+        # Reproducir audio sincronizado
         if self.audio_file:
             try:
-                current_pos = self.get_current_position()
-                if current_pos > 0:
-                    pygame.mixer.music.play(start=current_pos)
+                if self.pause_position > 0:
+                    pygame.mixer.music.play(start=self.pause_position)
                 else:
                     pygame.mixer.music.play()
             except:
@@ -130,16 +202,21 @@ class VideoPlayer:
     
     def pause(self):
         self.is_playing = False
+        self.pause_position = self.get_current_position()
+        
         if self.video_thread:
             self.video_thread.stop()
         pygame.mixer.music.pause()
     
     def stop(self):
         self.is_playing = False
+        self.pause_position = 0
+        
         if self.video_thread:
             self.video_thread.stop()
             self.video_thread = None
         pygame.mixer.music.stop()
+        
         if self.cap:
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     
@@ -150,31 +227,42 @@ class VideoPlayer:
         pygame.mixer.music.set_volume(volume / 100.0)
     
     def get_duration(self):
-        if not self.cap:
-            return 0
-        frame_count = self.cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        return frame_count / self.fps if self.fps > 0 else 0
+        if self.is_audio_only:
+            try:
+                sound = pygame.mixer.Sound(self.audio_file)
+                return sound.get_length()
+            except:
+                return 0
+        elif self.cap:
+            frame_count = self.cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            return frame_count / self.fps if self.fps > 0 else 0
+        return 0
     
     def get_current_position(self):
-        if not self.cap:
-            return 0
-        current_frame = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
-        return current_frame / self.fps if self.fps > 0 else 0
+        if not self.is_playing:
+            return self.pause_position
+        
+        # Usar tiempo real como referencia
+        return time.time() - self.play_start_time
     
     def seek(self, seconds):
-        if not self.cap:
-            return
         was_playing = self.is_playing
         
+        # Detener todo
         if self.video_thread:
             self.video_thread.stop()
-        
         pygame.mixer.music.stop()
         
-        frame_number = int(seconds * self.fps)
-        self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        self.pause_position = seconds
         
+        # Posicionar video
+        if self.cap:
+            frame_number = int(seconds * self.fps)
+            self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        
+        # Reanudar si estaba reproduciéndose
         if was_playing:
+            self.play_start_time = time.time() - seconds
             self.play()
     
     def __del__(self):
@@ -182,7 +270,7 @@ class VideoPlayer:
             self.video_thread.stop()
         if self.cap:
             self.cap.release()
-        if self.audio_file and os.path.exists(self.audio_file):
+        if self.audio_file and os.path.exists(self.audio_file) and not self.is_audio_only:
             try:
                 os.unlink(self.audio_file)
             except:
