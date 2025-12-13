@@ -88,7 +88,7 @@ class VideoPlayer:
             return temp_audio.name
         except:
             return None
-    
+
     def load_video(self, path):
         if self.cap:
             self.stop()
@@ -115,6 +115,7 @@ class VideoPlayer:
                 pygame.mixer.music.load(self.audio_file)
                 pygame.mixer.music.set_volume(self.volume / 100.0)
                 self.generate_subtitles()
+                # NO iniciar reproducción automáticamente
             except Exception as e:
                 print(f"Error cargando audio: {e}")
         else:
@@ -128,8 +129,11 @@ class VideoPlayer:
                     pygame.mixer.music.load(self.audio_file)
                     pygame.mixer.music.set_volume(self.volume / 100.0)
                     self.generate_subtitles()
+                    # NO iniciar reproducción automáticamente
                 except:
                     pass
+
+
     
     def generate_subtitles(self):
         if self.audio_file and self.subtitles_enabled:

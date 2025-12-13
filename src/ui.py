@@ -1,5 +1,6 @@
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QFileDialog
 from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFont
 from components.controls import Controls
 
 class UserInterface(QMainWindow):
@@ -32,6 +33,23 @@ class UserInterface(QMainWindow):
         self.video_widget.setScaledContents(False)
         layout.addWidget(self.video_widget, stretch=1)
         
+        # Título inicial "EL SEÑOR DE LOS REPRODUCTORES"
+        self.title_label = QLabel("EL SEÑOR DE LOS\nREPRODUCTORES")
+        title_font = QFont("Arial", 48, QFont.Bold)
+        self.title_label.setFont(title_font)
+        self.title_label.setStyleSheet("""
+            color: #ff8c00;
+            background-color: transparent;
+            padding: 20px;
+        """)
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.title_label.setWordWrap(True)
+        
+        # Posicionar el título sobre el video widget
+        self.title_label.setParent(self.video_widget)
+        self.title_label.setGeometry(0, 0, 800, 600)
+        self.title_label.show()
+        
         # Subtítulos
         self.subtitle_label = QLabel("")
         self.subtitle_label.setStyleSheet("""
@@ -56,6 +74,12 @@ class UserInterface(QMainWindow):
         self.timer.timeout.connect(self.update_ui)
         self.timer.start(100)
     
+    def resizeEvent(self, event):
+        """Ajustar el título al redimensionar la ventana"""
+        super().resizeEvent(event)
+        if hasattr(self, 'title_label') and self.title_label.isVisible():
+            self.title_label.setGeometry(0, 0, self.video_widget.width(), self.video_widget.height())
+    
     def connect_signals(self):
         self.controls.play_pause_clicked.connect(self.toggle_play_pause)
         self.controls.stop_clicked.connect(self.stop)
@@ -67,6 +91,7 @@ class UserInterface(QMainWindow):
     
     def toggle_play_pause(self):
         if not self.player.cap and not self.player.is_audio_only:
+            # Si no hay video cargado, abrir diálogo
             file_path, _ = QFileDialog.getOpenFileName(
                 self, "Seleccionar Archivo", "",
                 "Multimedia (*.mp4 *.avi *.mkv *.mov *.mp3 *.wav *.ogg *.flac);;Videos (*.mp4 *.avi *.mkv *.mov);;Audio (*.mp3 *.wav *.ogg *.flac);;Todos (*.*)"
@@ -75,13 +100,17 @@ class UserInterface(QMainWindow):
                 self.player.load_video(file_path)
                 duration = self.player.get_duration()
                 self.controls.set_duration(int(duration * 1000))
-                self.player.play()
-                self.controls.set_play_pause_text("Pause")
+                # Ocultar el título al cargar video
+                self.title_label.hide()
+                # NO reproducir automáticamente, solo cambiar el texto del botón
+                self.controls.set_play_pause_text("Play")
         else:
             if self.player.is_playing:
                 self.player.pause()
                 self.controls.set_play_pause_text("Play")
             else:
+                # Ocultar el título al reproducir
+                self.title_label.hide()
                 self.player.play()
                 self.controls.set_play_pause_text("Pause")
 
@@ -89,6 +118,11 @@ class UserInterface(QMainWindow):
         self.player.stop()
         self.controls.set_play_pause_text("Play")
         self.controls.update_progress(0)
+        # Mostrar el título nuevamente al detener
+        if self.player.cap or self.player.is_audio_only:
+            self.title_label.hide()
+        else:
+            self.title_label.show()
     
     def seek_position(self, position_ms):
         position_seconds = position_ms / 1000.0
@@ -132,5 +166,7 @@ class UserInterface(QMainWindow):
             self.player.load_video(file_path)
             duration = self.player.get_duration()
             self.controls.set_duration(int(duration * 1000))
-            self.player.play()
-            self.controls.set_play_pause_text("Pause")
+            # Ocultar el título al cargar
+            self.title_label.hide()
+            # NO reproducir automáticamente
+            self.controls.set_play_pause_text("Play")
