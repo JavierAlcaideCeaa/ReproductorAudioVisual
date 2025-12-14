@@ -7,27 +7,27 @@ Reproductor multimedia avanzado desarrollado en Python con PyQt5 que permite rep
 
 ## Características Principales
 
-### 🎬 Reproducción Multimedia
+### Reproducción Multimedia
 - **Formatos de Video**: MP4, AVI, MKV, MOV
 - **Formatos de Audio**: MP3, WAV, OGG, FLAC, M4A
 - Sincronización perfecta entre audio y video
 - Control de volumen en tiempo real
 - Barra de progreso interactiva con seek clickeable
 
-### 📝 Sistema de Subtítulos Inteligente
+### Sistema de Subtítulos Inteligente
 - **Generación automática de subtítulos** mediante reconocimiento de voz
 - **Detección automática de idioma** (Español, Inglés, Francés, Alemán, Italiano, Portugués, Japonés, Chino, Coreano, Ruso)
 - Subtítulos sincronizados con el audio/video
 - Botón "Subtitles" para activar/desactivar subtítulos
 - Interfaz limpia con fondo semi-transparente
 
-### 🌐 Traducción en Tiempo Real
+### Traducción en Tiempo Real
 - **Traducción automática de subtítulos**
 - Traducción bidireccional Español ↔ Inglés
 - Botón "Traducir" con indicador de idioma objetivo
 - Cambio instantáneo entre idioma original y traducido
 
-### 🎨 Interfaz de Usuario
+### Interfaz de Usuario
 - Diseño moderno con tema oscuro
 - Botones con efecto hover en color naranja (#ff8c00)
 - Controles intuitivos y responsivos
